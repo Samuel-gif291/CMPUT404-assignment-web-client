@@ -21,9 +21,9 @@
 import sys
 import socket
 import re
+import urllib
 # you may use urllib to encode data appropriately
 import urllib.parse
-import errno
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -34,26 +34,23 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    def __init__(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     #def get_host_port(self,url):
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
-        return None
 
     def get_code(self, data):
-        temp = data.split("\r\n")[0].split(" ")[1]
-        return temp
+        temp = data.split(' ')
+        return int(temp[1])
 
     def get_headers(self,data):
-        temp = data.split("\r\n\r\n")[0]
-        return temp
+        temp = data.split('\r\n\r\n', 1)
+        return temp[0]
 
     def get_body(self, data):
-        temp = data.split("\r\n\r\n")[1]
-        return temp
+        temp = data.split('\r\n\r\n', 1)
+        return temp[1]
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -74,70 +71,74 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
 
-        host, port, path = self.url_parser(url)
+        processed_url = urllib.parse.urlparse(url)
+        host = processed_url.netloc.split(":")[0]
 
-        try:
-            self.connect(host, port)
-        except:
-            if (host == "localhost"):
-                self.connect("127.0.0.1", port)
-        finally:
-            print("Error connection to port and host!")
+        if processed_url.port:
+            port = processed_url.port
+        else: 
+            port = 80
+
+        self.connect(host,port)
         
-        try:
-            req = self.request_formatter("GET", host, port, path)
-            self.sock.sendall(req)
-        except IOError as e:
-            if e.errno == errno.EPIPE:
-                pass
-            # Handling of the error
+        if processed_url.path:
+            path = processed_url.path
+        else:
+            path = '/'
 
-
-        resp = self.recvall(self.sock)
-
-        self.sock.close()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # print out response stored in resp
-        temp = int(self.get_code(resp))
-        body = self.get_body(resp)
-        print(body)
+        if processed_url.query:
+            path = path + ('?' + processed_url.query)
         
+        req = ("GET " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\nConnection: close\r\n\r\n" %port)
+        
+        self.sendall(req)
+        data = self.recvall(self.socket)
+        code = self.get_code(data)
+        body = self.get_body(data)
+        
+        print("Status code: %d" % code)
+        print("Body: \n"+ body )
+
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
 
-        host, port, path = self.url_parser(url)
+        processed_url = urllib.parse.urlparse(url)
+        host = processed_url.netloc.split(":")[0]
+        
+        if processed_url.port:
+            port = processed_url.port
+        else: 
+            port = 80
 
-        try:
-            self.connect(host, port)
-        except:
-            if (host == "localhost"):
-                self.connect("127.0.0.1", port)
-        finally:
-            print("Error connection to port and host!")
+        self.connect(host,port)
 
-        try:
-            req = self.request_formatter("POST", host, port, path, args)
-            self.sock.sendall(req)
-        except IOError as e:
-            if e.errno == errno.EPIPE:
-                pass
-            # Handling of the error
+        if processed_url.path:
+            path = processed_url.path
+        else:
+            path = '/'
 
-        resp = self.recvall(self.sock)
+        if processed_url.query:
+            path += ('?' + processed_url.query)
+        req = ("POST " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\n" %port)
+        if not args:
+            req = req + ("Content-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n")
+            req = req + ("Connection: close\r\n\r\n")
+        else:
+            byte_enc = urllib.parse.urlencode(args)
+            content_length = len(str(byte_enc))
+            print("Content Length = %d" %content_length)
+            req = req + ("Content-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n" %content_length)
+            req = req + byte_enc
 
-        self.sock.close()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sendall(req)
+        data = self.recvall(self.socket)
+        code = self.get_code(data)
+        body = self.get_body(data)
 
-        code = int(self.get_code(resp))
-        body = self.get_body(resp)
-        print(body)
+        print("Status code: %d" % code)
+        print("Body: \n"+ body )
 
         return HTTPResponse(code, body)
 
@@ -147,70 +148,6 @@ class HTTPClient(object):
         else:
             return self.GET( url, args )
     
-    def url_parser(self, url):
-        ''' This function traverses a url.
-            Input: url is a string containing information to be processed.
-            Returns: host(string), port number(int), and path of an url(string).
-        '''
-        host, port, path = [None,None,None]
-
-        # Case 1:
-
-        if (url[0:7] == "http://"):
-            host = url[7:]
-        else:
-            try:
-                host = url
-            except Exception as e:
-                print("Invalid url!"); print(e)
-        
-        #Case 2:
-
-        if ("/" in host):
-            char_index = host.index("/")
-            path, host = [ host[char_index:], host[0:char_index] ]
-
-        if (":" in host):
-            char_index = host.index(":")
-            port, host = [ int(host[char_index+1:]), host[0:char_index] ]
-
-        if (path == None):
-            path = "/"
-        
-        return host, port, path
-    
-    def request_formatter(self, instruction, host, port, path, args=None):
-        ''' This function formats the results of a request.
-            Input: instruction, host and path are strings; host is an int.
-            Returns: a formatted string stored in formal_request.
-        '''
-        if (instruction == "GET"):
-            req_format = "GET {path_var} HTTP/1.1\r\n" \
-                               "Host: {host_var}\r\n" \
-                               "Connection: keep-alive\r\n"
-        elif (instruction == "POST"):
-            req_format = "POST {path_var} HTTP/1.1\r\n" \
-                               "Host: {host_var}\r\n" \
-                               "Connection: keep-alive\r\n"
-        
-        if (port):
-            formal_request= req_format.format(path_var = path, host_var = host+":"+str(port))
-        else:
-            formal_request = req_format.format(path_var = path, host_var = host)
-        
-        if (instruction == "POST"):
-            formal_request = formal_request + "Content-Type: application/x-www-form-urlencoded\r\n"
-            if (isinstance(args, dict) and args.keys() != []):
-                #args = urllib.parse(args)
-                formal_request = formal_request + "Content-Length: "+str(len(args))+"\r\n\r\n"
-                #formal_request = formal_request + args+"\r\n"
-            else:
-                formal_request = formal_request + "Content-Length: 0\r\n"
-        
-        formal_request = formal_request + "\r\n"
-        return formal_request.encode('utf-8')
-
-
 if __name__ == "__main__":
     client = HTTPClient()
     command = "GET"
