@@ -24,6 +24,7 @@ import re
 import urllib
 # you may use urllib to encode data appropriately
 import urllib.parse
+PAYLOAD_SIZE = 1024
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -63,7 +64,7 @@ class HTTPClient(object):
         buffer = bytearray()
         done = False
         while not done:
-            part = sock.recv(1024)
+            part = sock.recv(PAYLOAD_SIZE)
             if (part):
                 buffer.extend(part)
             else:
@@ -90,14 +91,14 @@ class HTTPClient(object):
         if processed_url.query:
             path = path + ('?' + processed_url.query)
         
-        req = ("GET " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\nConnection: close\r\n\r\n" %port)
+        req = "GET " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\nConnection: close\r\n\r\n" %port
         
         self.sendall(req)
         data = self.recvall(self.socket)
         code = self.get_code(data)
         body = self.get_body(data)
         
-        print("Status code: %d" % code)
+        print("Status Code: %d" % code)
         print("Body: \n"+ body )
 
         return HTTPResponse(code, body)
@@ -120,16 +121,16 @@ class HTTPClient(object):
             path = '/'
 
         if processed_url.query:
-            path += ('?' + processed_url.query)
-        req = ("POST " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\n" %port)
+            path = path + '?' + processed_url.query
+        req = "POST " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\n" %port
         if not args:
-            req = req + ("Content-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n")
-            req = req + ("Connection: close\r\n\r\n")
+            req = req + "Content-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n"
+            req = req + "Connection: close\r\n\r\n"
         else:
             byte_enc = urllib.parse.urlencode(args)
             content_length = len(str(byte_enc))
             print("Content Length = %d" %content_length)
-            req = req + ("Content-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n" %content_length)
+            req = req + "Content-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n" %content_length
             req = req + byte_enc
 
         self.sendall(req)
@@ -137,7 +138,7 @@ class HTTPClient(object):
         code = self.get_code(data)
         body = self.get_body(data)
 
-        print("Status code: %d" % code)
+        print("Status Code: %d" % code)
         print("Body: \n"+ body )
 
         return HTTPResponse(code, body)
