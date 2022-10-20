@@ -80,8 +80,11 @@ class HTTPClient(object):
             port = processed_url.port
         else: 
             port = 80
-
-        self.connect(host,port)
+        
+        try:
+            self.connect(host,port)
+        except Exception as e:
+            print(e)
         
         if processed_url.path:
             path = processed_url.path
@@ -98,8 +101,7 @@ class HTTPClient(object):
         code = self.get_code(data)
         body = self.get_body(data)
         
-        print("Status Code: %d" % code)
-        print("Body: \n"+ body )
+        print("Status Code: %d" % code); print("Body: \n"+ body )
 
         return HTTPResponse(code, body)
 
@@ -113,7 +115,10 @@ class HTTPClient(object):
         else: 
             port = 80
 
-        self.connect(host,port)
+        try:
+            self.connect(host,port)
+        except Exception as e:
+            print(e)
 
         if processed_url.path:
             path = processed_url.path
@@ -122,7 +127,9 @@ class HTTPClient(object):
 
         if processed_url.query:
             path = path + '?' + processed_url.query
+        
         req = "POST " + path + " HTTP/1.1\r\nHost: " + host + ":%d\r\n" %port
+        
         if not args:
             req = req + "Content-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n"
             req = req + "Connection: close\r\n\r\n"
@@ -138,8 +145,7 @@ class HTTPClient(object):
         code = self.get_code(data)
         body = self.get_body(data)
 
-        print("Status Code: %d" % code)
-        print("Body: \n"+ body )
+        print("Status Code: %d" % code); print("Body: \n"+ body )
 
         return HTTPResponse(code, body)
 
